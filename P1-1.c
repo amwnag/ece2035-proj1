@@ -99,40 +99,55 @@ int main(int argc, char *argv[]) {
 int matchGeorge(char *Crowd, int ind) {
 	
 	
-	// scan 4 pixels ahead then compare (4 bytes, which fits in a word)
-	// however it is possible for the 4th pixel will be out of bounds... how to check for that?
+	// scan 3 pixels ahead then compare (3 bytes, which fits in a word)
+	// guaranteed that 3rd pixel will not be out of bounds for a face
 	// chose to put first pixel at ind + 1 as lsb
-	int pixelsChunk = Crowd[ind + 1] | (Crowd[ind + 2] << 8) | (Crowd[ind + 3] << 16);
-	
-	if (ind + 4 < 64) {
-		pixelsChunk = pixelsChunk | (Crowd[ind + 4] << 24);
-	}
+	int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 8) | (Crowd[ind + 2] << 16) | (Crowd[ind + 3] << 24);
 	
 	if (DEBUG) {
 		printf("Helper function matchGeorge called. Current chunk of pixels is 0x%08x\n", pixelsChunk);
 	}
-	int matchArr[]; // note syntax is different from java
+	// int matchArr[]; // note syntax is different from java... array size needs to be specified...
+	// or maybe instead use a pointer
+	// terminate loop as soon as lsb doesn't match
+	int* startMatch;
 	switch (Crowd[ind]) {
 		case 1:
-			matchArr = whiteSequences;
+			startMatch = &(whiteSequences[0]); // want the base address
+			break;			
 		case 2:
-			matchArr = redSequences;
+			startMatch = &(redSequences[0]);
+			break;	
 		case 3:
-			matchArr = blueSequences;
+			startMatch = &(blueSequences[0]);
+			break;	
 		case 5:
-			matchArr = yellowSequences;
+			startMatch = &(yellowSequences[0]);
+			break;	
 		default:
 			break;
 		
 	}
 	
-	// if there is a match... return some special value or call another helper function?
+	// can process all bg pixels to be the same color
 	
-	// even if only counting first 4 pixels, there are 16 possibilities
-	// let's do it with an if statement then (though it will be ugly)
-	// to reduce static memory count... create an array in memory that can be accessed, then iterate
 	
-	// maybe do a masks
+	// pointer arithmetic...
+	// compare last byte... mask
+	int lastByte = 0xFF;
+	int i = 0;
+	int curr = *(startMatch + i);
+	while ((curr & lastByte) == Crowd[ind]) { // little endian byte access
+		if (pixelsChunk == curr) {
+			// wow this may be george
+			// a little tricky with bg 
+			// if there is a match... call another helper function to branch out
+		}
+		
+		// update
+		curr = *(startMatch + ++i);
+	}
+	
 	return 0;
 
 }
