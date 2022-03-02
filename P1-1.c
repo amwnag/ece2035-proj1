@@ -27,20 +27,12 @@ offsets from the crowd image base.*/
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DEBUG 1 // RESET THIS TO 0 BEFORE SUBMITTING YOUR CODE
+#define DEBUG 0 // RESET THIS TO 0 BEFORE SUBMITTING YOUR CODE
 
 
 // global variables
-// can use less memory if each word stores one sequence of 4 pixels
-int whiteSequences[] = {0x12125558};
-int redSequences[] = {0x2111112F, 0x2211122F, 0x22127585, 0x22222222, 0x2222222F, 0x22225555, 0x255555F, 0x2F};
-int blueSequences[] = {0x33333F, 0x35558555, 0x35588555}; //0x3F555857
-int yellowSequences[] = {0x55585721, 0x55555555, 0x55555222, 0x555552F, 0x55555F, 0x55558555, 0x55588855, 0x555F, 0x55755575, 0x55855585};
 
-int hatShirt[] = {0x12125558, 0x8553, 0x35588555, 0x2121, 0x2211122F, 0x33333F};
-
-int				matchRow(char *, int);
-int				verifyGeorge(char *, int, int *, int *);
+int				matchHat(char *, int, int *, int *);
 
 int main(int argc, char *argv[]) {
    int	             CrowdInts[1024];
@@ -69,7 +61,7 @@ int main(int argc, char *argv[]) {
    
    // strategy: scan every 11th row
    // Will be able to always find a face pixel (if exists)
-   for (int currRow = 0; currRow < 64; currRow += 10) {
+   for (int currRow = 0; currRow < 64; currRow ++) {
 	   for (int currCol = 0; currCol < 64; currCol++) {
 		   if (HatLoc != 0 && ShirtLoc != 0) { // has been assigned
 			   break;
@@ -82,7 +74,7 @@ int main(int argc, char *argv[]) {
 				case 5:
 					// begin scanning, since there is a face that is possibly george
 					// to optimize, skip by something if no match
-					currCol += verifyGeorge(Crowd, ind, &HatLoc, &ShirtLoc) - 1;
+					currCol += matchHat(Crowd, ind, &HatLoc, &ShirtLoc) - 1;
 					break;
 				default:
 					// non-george face pixels or bg pixels
@@ -96,30 +88,12 @@ int main(int argc, char *argv[]) {
    exit(0);
 }
 
-int verifyGeorge(char * Crowd, int ind, int * hat, int * shirt) {
-
-	int firstRow = matchRow(Crowd, ind);
-	if (firstRow) {
-		return firstRow;
-	}
-	
-	for (int rowsUp = 1; rowsUp < 12; rowsUp++) {
-		Crowd[
-	}
-	// now scan entirety of the match
-	// traverse up and down rows
-	
-	// *hat =
-	// *shirt =
-	return 1;
-	
-}
-
-int matchRow(char *Crowd, int ind) {
+int matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 
 	unsigned int pixelsChunk = 0;
 	unsigned int extraPixels = 0;
-	
+	void				horizontalMatch(char *, int, int *, int *);
+	void 				verticalMatch(char *, int, int *, int *);
 	int scanAhead;
 	for (scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
 		if (((ind + scanAhead) % 64) >= 64){
@@ -146,58 +120,122 @@ int matchRow(char *Crowd, int ind) {
 		if ((extraPixels & 0xF) == 0xF) {
 			break;
 		}
-		
 	}
-	
 
 	// int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 4) | (Crowd[ind + 2] << 8) | (Crowd[ind + 3] << 12);
 	
 	if (DEBUG) {
-		printf("Face at %d. Current chunk is 0x%08x. ", ind / 64, pixelsChunk);
+		//printf("Face at %d. Current chunk is 0x%08x. ", ind / 64, pixelsChunk);
 		if (extraPixels != 0) {
-			printf("Wowza some extra pixels 0x%08x", extraPixels);
+			//printf("Wowza some extra pixels 0x%08x", extraPixels);
 		}
-		printf("\n");
 	}
 
-	
-	int* startMatch;
-	switch (Crowd[ind]) {
-		case 1:
-			startMatch = &(whiteSequences[0]); // want the base address
-			break;			
-		case 2:
-			startMatch = &(redSequences[0]);
-			break;	
-		case 3:
-			startMatch = &(blueSequences[0]);
-			break;	
-		case 5:
-			startMatch = &(yellowSequences[0]);
-			break;	
-		default:
-			break;
-		
-	}
-	
-	int i = 0;
-	int curr = *(startMatch + i);
-	while (i < 10) { // make sure first pixel is the same somehow...
-		// well now above doesn't work anymore hmph
-		if (pixelsChunk == curr) {
-			if (DEBUG) {
-				// printf("---> Wow this may be George. Let's do a more thorough scan now\n");
-			}
-			return 0;
-		}
-		
-		// update
-		curr = *(startMatch + ++i);
+	if (pixelsChunk == 0x12125558 && extraPixels == 0x8553) {
+		horizontalMatch(Crowd, ind, hat, shirt);
+	} else if (pixelsChunk == 0x35588555 && extraPixels == 0x2121) {
+		horizontalMatch(Crowd, ind, hat, shirt);
+	} else if (pixelsChunk == 0x2211122F) {
+		// hat
+		verticalMatch(Crowd, ind + 3, hat, shirt);
+	} else if (pixelsChunk == 0x33333F) {
+		// shirt
+		verticalMatch(Crowd, ind + 2, hat, shirt);
 	}
 	
 	return scanAhead;
 }
 
+void verticalMatch(char *Crowd, int ind, int * hat, int * shirt) {
+	if (DEBUG) {
+		printf("Entered vertical match for face at %d\n", ind / 64);
+	}
+	// process rows where eyes would be
+	int rowAddr1 = ind + (4 * 64) - 4;
+	int rowAddr2 = ind + (7 * 64) - 4;
+	int row1 = 0;
+	int row2 = 0;
+	for (int j = 0; j < 5; j++) { // only need to scan half of face
+		int pixel1 = Crowd[rowAddr1 + j];
+		int pixel2 = Crowd[rowAddr2 + j];
+		row1 = row1 << 4;
+		row1 = row1 | pixel1;
+		row2 = row2 << 4;
+		row2 = row2 | pixel2;
+	}
+	
+	if (row1 != 0x55755 && row2 != 0x55755) {
+		if (DEBUG) {
+			printf("--> Eyes didn't match. Instead had found 0x%02x and 0x%02x\n", row1, row2);
+		}
+		return;
+	}
+	
+	int mid1 = 0;
+	int mid2 = 0;
+	
+	// traverse down the column
+	for (int i = 0; i < 12; i++) {
+		int pixel = Crowd[ind + (i * 64)];
+		if (i < 8) {
+			mid1 = mid1 << 4;
+			mid1 = mid1 | pixel;
+		} else {
+			mid2 = mid2 << 4;
+			mid2 = mid2 | pixel;
+		}
+	}
+	
+	if (Crowd[ind] == 0x1) {
+		// hat
+		if (mid1 != 0x12125558 || mid2 != 0x8553) {
+			return;
+		}
+		*hat = ind;
+		*shirt = ind + (64 * 11);
+	} else if (Crowd[ind] == 0x3) {
+		// shirt
+		if (mid1 != 0x35588555 || mid2 != 0x2121) {
+			return;
+		}
+		*hat = ind + (64 * 11);
+		*shirt = ind;
+	}
+
+}
+
+void horizontalMatch(char *Crowd, int ind, int * hat, int * shirt) {
+	if (DEBUG) {
+		printf("Entered horizontal match for face at %d\n", ind / 64);
+	}
+	// process columns where eyes would be
+	int colAddr1 = ind + 4 - (4 * 64);
+	int colAddr2 = ind + 7 - (4 * 64);
+	int col1 = 0;
+	int col2 = 0;
+	for (int i = 0; i < 5; i++) { // only need to scan half of face
+		int pixel1 = Crowd[colAddr1 + (i * 64)];
+		int pixel2 = Crowd[colAddr2 + (i * 64)];
+		col1 = col1 << 4;
+		col1 = col1 | pixel1;
+		col2 = col2 << 4;
+		col2 = col2 | pixel2;
+	}
+	
+	if (col1 != 0x55755 && col2 != 0x55755) {
+		return;
+	}
+	
+	if (Crowd[ind] == 0x1) {
+		// hat
+		*hat = ind;
+		*shirt = ind + 11;
+	} else if (Crowd[ind] == 0x3) {
+		// shirt
+		*hat = ind + 11;
+		*shirt = ind;
+	}
+}
 
 
 /* This routine loads in up to 1024 newline delimited integers from
