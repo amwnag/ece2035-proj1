@@ -31,10 +31,16 @@ offsets from the crowd image base.*/
 
 
 // global variables
-int whiteSequences[] = {};
-int redSequences[] = {};
-int blueSequences[] = {};
-int yellowSequences[] = {};
+// can use less memory if each word stores one sequence of 4 pixels
+int whiteSequences[] = {0x12125558};
+int redSequences[] = {0x2111112F, 0x2211122F, 0x22127585, 0x22222222, 0x2222222F, 0x22225555, 0x255555F, 0x2F};
+int blueSequences[] = {0x33333F, 0x35558555, 0x35588555}; //0x3F555857
+int yellowSequences[] = {0x55585721, 0x55555555, 0x55555222, 0x555552F, 0x55555F, 0x55558555, 0x55588855, 0x555F, 0x55755575, 0x55855585};
+
+int hatShirt[] = {0x12125558, 0x8553, 0x35588555, 0x2121, 0x2211122F, 0x33333F};
+
+int				matchRow(char *, int);
+int				verifyGeorge(char *, int, int *, int *);
 
 int main(int argc, char *argv[]) {
    int	             CrowdInts[1024];
@@ -43,7 +49,7 @@ int main(int argc, char *argv[]) {
    char *Crowd = (char *)CrowdInts;
    int	             NumInts, HatLoc=0, ShirtLoc=0;
    int               Load_Mem(char *, int *);
-   int				matchGeorge(char *, int);
+   
 
    if (argc != 2) {
      printf("usage: ./P1-1 testcase_file\n");
@@ -63,8 +69,11 @@ int main(int argc, char *argv[]) {
    
    // strategy: scan every 11th row
    // Will be able to always find a face pixel (if exists)
-   for (int currRow = 0; currRow < 64; currRow += 11) {
+   for (int currRow = 0; currRow < 64; currRow += 10) {
 	   for (int currCol = 0; currCol < 64; currCol++) {
+		   if (HatLoc != 0 && ShirtLoc != 0) { // has been assigned
+			   break;
+		   }
 		   int ind = currRow * 64 + currCol;
 		   switch (Crowd[ind]) {
 				case 1:
@@ -72,20 +81,11 @@ int main(int argc, char *argv[]) {
 				case 3:
 				case 5:
 					// begin scanning, since there is a face that is possibly george
-					// skip 3 if no match
-					matchGeorge(Crowd, ind);
-					currCol += 2;
-					break;
-				case 9:
-				case 10:
-				case 11:
-					// bg pixels
+					// to optimize, skip by something if no match
+					currCol += verifyGeorge(Crowd, ind, &HatLoc, &ShirtLoc) - 1;
 					break;
 				default:
-					// non-george face pixels
-					// skip by offsets of 3 until finding a bg pixel 
-					// or until have performed maxiumum three skips of 3
-					currCol += 2;
+					// non-george face pixels or bg pixels
 					break;
 		   }
 	   }
@@ -96,20 +96,71 @@ int main(int argc, char *argv[]) {
    exit(0);
 }
 
-int matchGeorge(char *Crowd, int ind) {
+int verifyGeorge(char * Crowd, int ind, int * hat, int * shirt) {
+
+	int firstRow = matchRow(Crowd, ind);
+	if (firstRow) {
+		return firstRow;
+	}
 	
+	for (int rowsUp = 1; rowsUp < 12; rowsUp++) {
+		Crowd[
+	}
+	// now scan entirety of the match
+	// traverse up and down rows
 	
-	// scan 3 pixels ahead then compare (3 bytes, which fits in a word)
-	// guaranteed that 3rd pixel will not be out of bounds for a face
-	// chose to put first pixel at ind + 1 as lsb
-	int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 8) | (Crowd[ind + 2] << 16) | (Crowd[ind + 3] << 24);
+	// *hat =
+	// *shirt =
+	return 1;
+	
+}
+
+int matchRow(char *Crowd, int ind) {
+
+	unsigned int pixelsChunk = 0;
+	unsigned int extraPixels = 0;
+	
+	int scanAhead;
+	for (scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
+		if (((ind + scanAhead) % 64) >= 64){
+			break; // stay on the same row
+		}
+		
+		int pixel = Crowd[ind + scanAhead]; // be careful not to modify original arr
+		if (pixel == 0x9 || pixel == 0xa || pixel == 0xb) {
+			pixel = 0xF;
+		}
+			
+		if (scanAhead < 8) {
+			pixelsChunk = pixelsChunk << 4;
+			pixelsChunk = pixelsChunk | pixel;
+		} else {
+			extraPixels = extraPixels << 4;
+			extraPixels = extraPixels | pixel;
+		}
+		
+		// detect if the face has been left
+		if ((pixelsChunk & 0xF) == 0xF) {
+			break;
+		}
+		if ((extraPixels & 0xF) == 0xF) {
+			break;
+		}
+		
+	}
+	
+
+	// int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 4) | (Crowd[ind + 2] << 8) | (Crowd[ind + 3] << 12);
 	
 	if (DEBUG) {
-		printf("Helper function matchGeorge called. Current chunk of pixels is 0x%08x\n", pixelsChunk);
+		printf("Face at %d. Current chunk is 0x%08x. ", ind / 64, pixelsChunk);
+		if (extraPixels != 0) {
+			printf("Wowza some extra pixels 0x%08x", extraPixels);
+		}
+		printf("\n");
 	}
-	// int matchArr[]; // note syntax is different from java... array size needs to be specified...
-	// or maybe instead use a pointer
-	// terminate loop as soon as lsb doesn't match
+
+	
 	int* startMatch;
 	switch (Crowd[ind]) {
 		case 1:
@@ -129,27 +180,22 @@ int matchGeorge(char *Crowd, int ind) {
 		
 	}
 	
-	// can process all bg pixels to be the same color
-	
-	
-	// pointer arithmetic...
-	// compare last byte... mask
-	int lastByte = 0xFF;
 	int i = 0;
 	int curr = *(startMatch + i);
-	while ((curr & lastByte) == Crowd[ind]) { // little endian byte access
+	while (i < 10) { // make sure first pixel is the same somehow...
+		// well now above doesn't work anymore hmph
 		if (pixelsChunk == curr) {
-			// wow this may be george
-			// a little tricky with bg 
-			// if there is a match... call another helper function to branch out
+			if (DEBUG) {
+				// printf("---> Wow this may be George. Let's do a more thorough scan now\n");
+			}
+			return 0;
 		}
 		
 		// update
 		curr = *(startMatch + ++i);
 	}
 	
-	return 0;
-
+	return scanAhead;
 }
 
 
