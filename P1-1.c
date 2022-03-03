@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
    // strategy: scan every 11th row
    // Will be able to always find a face pixel (if exists)
    for (int currRow = 0; currRow < 64; currRow ++) {
-	   for (int currCol = 0; currCol < 64; currCol += 7) {
+	   for (int currCol = 0; currCol < 64; currCol += 9) {
 		   if (HatLoc != 0 && ShirtLoc != 0) { // has been assigned
 			   break;
 		   }
@@ -95,7 +95,7 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	unsigned int pixelsChunk = 0;
 	unsigned int extraPixels = 0;
 	void				horizontalMatch(char *, int, int *, int *);
-	void 				verticalMatch(char *, int, int *, int *);
+	void 				eyesMatch(char *, int, int *, int *);
 	for (int i = 0; i < 7; i++) {
 		// backtracking, but what if there are two faces with side by side pixels?
 		// need some way to detect that
@@ -161,37 +161,14 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	} else if (pixelsChunk == 0x35588555 && extraPixels == 0x2121) {
 		horizontalMatch(Crowd, ind, hat, shirt);
 	} else if (pixelsChunk == 0x2211122F) {
-		// hat
-		verticalMatch(Crowd, ind + 3, hat, shirt);
-	} else if (pixelsChunk == 0x33333F) {
-		// shirt
-		verticalMatch(Crowd, ind + 2, hat, shirt);
+		// eyes
+		eyesMatch(Crowd, ind, hat, shirt);
 	}
 }
 
-void verticalMatch(char *Crowd, int ind, int * hat, int * shirt) {
+void eyesMatch(char *Crowd, int ind, int * hat, int * shirt) {
 	if (DEBUG) {
 		printf("Entered vertical match for face at %d\n", ind / 64);
-	}
-	// process rows where eyes would be
-	int rowAddr1 = ind + (4 * 64) - 4;
-	int rowAddr2 = ind + (7 * 64) - 4;
-	int row1 = 0;
-	int row2 = 0;
-	for (int j = 0; j < 5; j++) { // only need to scan half of face
-		int pixel1 = Crowd[rowAddr1 + j];
-		int pixel2 = Crowd[rowAddr2 + j];
-		row1 = row1 << 4;
-		row1 = row1 | pixel1;
-		row2 = row2 << 4;
-		row2 = row2 | pixel2;
-	}
-	
-	if (row1 != 0x55755 && row2 != 0x55755) {
-		if (DEBUG) {
-			printf("--> Eyes didn't match. Instead had found 0x%02x and 0x%02x\n", row1, row2);
-		}
-		return;
 	}
 	
 	int mid1 = 0;
