@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
    
    // strategy: scan every 11th row
    // Will be able to always find a face pixel (if exists)
-   for (int currRow = 0; currRow < 64; currRow ++) {
+   for (int currRow = 0; currRow < 64; currRow++) {
 	   for (int currCol = 0; currCol < 64; currCol += 9) {
 		   if (HatLoc != 0 && ShirtLoc != 0) { // has been assigned
 			   break;
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
 					// begin scanning, since there is a face that is possibly george
 					// to optimize, skip entire face (some value...) if no match
 					matchHat(Crowd, ind, &HatLoc, &ShirtLoc);
-					// currCol +=
+					currCol += 6;
 					break;
 				default:
 					// non-george face pixels or bg pixels
@@ -109,8 +109,8 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 		ind--;
 	}
 	
-	// only interested if the first pixel is blue, red, or white
-	if (Crowd[ind] > 0x3) {
+	// only interested if the first pixel is blue, yellow, or white
+	if (Crowd[ind] > 0x5) {
 		return;
 	}
 	
@@ -126,9 +126,6 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 		}
 		
 		int pixel = Crowd[ind + scanAhead]; // be careful not to modify original arr
-		if (pixel > 0x8) {
-			pixel = 0xF;
-		}
 			
 		if (scanAhead < 8) {
 			pixelsChunk = pixelsChunk << 4;
@@ -139,10 +136,11 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 		}
 		
 		// detect if the face has been left
-		if ((pixelsChunk & 0xF) == 0xF) {
-			break;
+		if ((pixelsChunk & 0xF) > 0x8) {
+			return; // no match
 		}
-		if ((extraPixels & 0xF) == 0xF) {
+		if ((extraPixels & 0xF) > 0x8) {
+			extraPixels = extraPixels >> 4; // clear off the last pixel
 			break;
 		}
 	}
@@ -150,56 +148,65 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	// int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 4) | (Crowd[ind + 2] << 8) | (Crowd[ind + 3] << 12);
 	
 	if (DEBUG) {
-		printf("Face at %d, row %d. Current chunk is 0x%08x. \n", ind, ind / 64, pixelsChunk);
-		if (extraPixels != 0) {
-			printf("--> Wowza some extra pixels 0x%08x\n", extraPixels);
-		}
+		printf("Face at %d, row %d. Current chunk is 0x%08x.", ind, ind / 64, pixelsChunk);
+		printf(" Extra pixels are 0x%08x\n", extraPixels);
 	}
 
 	if (pixelsChunk == 0x12125558 && extraPixels == 0x8553) {
 		horizontalMatch(Crowd, ind, hat, shirt);
 	} else if (pixelsChunk == 0x35588555 && extraPixels == 0x2121) {
 		horizontalMatch(Crowd, ind, hat, shirt);
-	} else if (pixelsChunk == 0x2211122F) {
-		// eyes
-		eyesMatch(Crowd, ind, hat, shirt);
+	} else if (pixelsChunk == 0x55755575 && extraPixels == 0x5) {
+		// pixel for middle of eyes
+		eyesMatch(Crowd, ind + 4, hat, shirt);
 	}
 }
 
 void eyesMatch(char *Crowd, int ind, int * hat, int * shirt) {
 	if (DEBUG) {
-		printf("Entered vertical match for face at %d\n", ind / 64);
+		printf("Entered eyes match for face at %d\n", ind / 64);
 	}
-	
-	int mid1 = 0;
-	int mid2 = 0;
-	
+		
 	// traverse down the column
-	for (int i = 0; i < 12; i++) {
-		int pixel = Crowd[ind + (i * 64)];
-		if (i < 8) {
-			mid1 = mid1 << 4;
-			mid1 = mid1 | pixel;
-		} else {
-			mid2 = mid2 << 4;
-			mid2 = mid2 | pixel;
-		}
+	// varies based on the orientation
+	// therefore traverse up 7 and traverse down 7
+	
+	int colUp = 0;
+	int colDown = 0;
+	
+	for (int i = 1; i < 8; i++) {
+		int pixelUp = Crowd[ind + (i * 64)];
+		int pixelDown = Crowd[ind - (i * 64)];
+		colUp = colUp << 4;
+		colUp = colUp | pixelUp;
+		colDown = colDown << 4;
+		colDown = colDown | pixelDown;
 	}
 	
-	if (Crowd[ind] == 0x1) {
-		// hat
-		if (mid1 != 0x12125558 || mid2 != 0x8553) {
-			return;
+	
+	// if george is right-side up
+	// colUp contents would be red white red white x x x
+	// colDown contents would be y y black black y y blue
+	
+	// if george is up-side down
+	// colUp contents would be y y black black y y blue
+	// colDown would equal right-side up colUp
+	
+	int seq1 = 0x2121; // would need to shift left by 12 before comparing
+	int seq2 = 0x5588553;
+
+	if (colDown == seq2) {
+		if (colUp >> 12 == seq1) {
+			// right side up match
+			*hat = ind + (4 * 64);
+			*shirt = ind - (7 * 64);
 		}
-		*hat = ind;
-		*shirt = ind + (64 * 11);
-	} else if (Crowd[ind] == 0x3) {
-		// shirt
-		if (mid1 != 0x35588555 || mid2 != 0x2121) {
-			return;
+	} else if (colUp == seq2) {
+		if (colDown >> 12 == seq1) {
+			// up side down match
+			*hat = ind - (4 * 64);
+			*shirt = ind + (7 * 64);
 		}
-		*hat = ind + (64 * 11);
-		*shirt = ind;
 	}
 
 }
@@ -223,6 +230,7 @@ void horizontalMatch(char *Crowd, int ind, int * hat, int * shirt) {
 	}
 	
 	if (col1 != 0x55755 && col2 != 0x55755) {
+		// eyes not matching
 		return;
 	}
 	
