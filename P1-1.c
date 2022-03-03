@@ -98,13 +98,26 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	void 				verticalMatch(char *, int, int *, int *);
 	for (int i = 0; i < 7; i++) {
 		// backtracking, but what if there are two faces with side by side pixels?
+		// need some way to detect that
 		if (Crowd[ind] > 0x8) {
 			ind++;
+			break;
+		}
+		if (Crowd[ind] == 0x1 || Crowd[ind] == 0x3) {
 			break;
 		}
 		ind--;
 	}
 	
+	// only interested if the first pixel is blue, red, or white
+	if (Crowd[ind] > 0x3) {
+		return;
+	}
+	
+	// fix edge case where int stops at bottom white stripe
+	if (Crowd[ind] == 0x1 && Crowd[ind + 2] == 0x5) {
+		ind -= 2;
+	}
 
 
 	for (int scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
