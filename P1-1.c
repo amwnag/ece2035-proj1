@@ -32,7 +32,7 @@ offsets from the crowd image base.*/
 
 // global variables
 
-void				matchHat(char *, int, int *, int *);
+void				matchRow(char *, int, int *, int *);
 
 int main(int argc, char *argv[]) {
    int	             CrowdInts[1024];
@@ -74,8 +74,8 @@ int main(int argc, char *argv[]) {
 				case 5:
 					// begin scanning, since there is a face that is possibly george
 					// to optimize, skip entire face (some value...) if no match
-					matchHat(Crowd, ind, &HatLoc, &ShirtLoc);
-					currCol += 6;
+					matchRow(Crowd, ind, &HatLoc, &ShirtLoc);
+					// currCol += 6;
 					break;
 				default:
 					// non-george face pixels or bg pixels
@@ -90,22 +90,21 @@ int main(int argc, char *argv[]) {
    exit(0);
 }
 
-void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
+void matchRow(char *Crowd, int ind, int * hat, int * shirt) {
 
 	unsigned int pixelsChunk = 0;
 	unsigned int extraPixels = 0;
 	void				horizontalMatch(char *, int, int *, int *);
 	void 				eyesMatch(char *, int, int *, int *);
-	for (int i = 0; i < 7; i++) {
+	for (int i = 0; i < 12; i++) {
 		// backtracking, but what if there are two faces with side by side pixels?
-		// need some way to detect that
+		// need some way to detect that...
+		// as of now, algorithm would fail in this special edge case
 		if (Crowd[ind] > 0x8) {
 			ind++;
 			break;
 		}
-		if (Crowd[ind] == 0x1 || Crowd[ind] == 0x3) {
-			break;
-		}
+		
 		ind--;
 	}
 	
@@ -113,11 +112,7 @@ void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	if (Crowd[ind] > 0x5) {
 		return;
 	}
-	
-	// fix edge case where int stops at bottom white stripe
-	if (Crowd[ind] == 0x1 && Crowd[ind + 2] == 0x5) {
-		ind -= 2;
-	}
+
 
 
 	for (int scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
