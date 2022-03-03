@@ -27,12 +27,12 @@ offsets from the crowd image base.*/
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DEBUG 0 // RESET THIS TO 0 BEFORE SUBMITTING YOUR CODE
+#define DEBUG 1 // RESET THIS TO 0 BEFORE SUBMITTING YOUR CODE
 
 
 // global variables
 
-int				matchHat(char *, int, int *, int *);
+void				matchHat(char *, int, int *, int *);
 
 int main(int argc, char *argv[]) {
    int	             CrowdInts[1024];
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
    // strategy: scan every 11th row
    // Will be able to always find a face pixel (if exists)
    for (int currRow = 0; currRow < 64; currRow ++) {
-	   for (int currCol = 0; currCol < 64; currCol++) {
+	   for (int currCol = 0; currCol < 64; currCol += 7) {
 		   if (HatLoc != 0 && ShirtLoc != 0) { // has been assigned
 			   break;
 		   }
@@ -73,11 +73,13 @@ int main(int argc, char *argv[]) {
 				case 3:
 				case 5:
 					// begin scanning, since there is a face that is possibly george
-					// to optimize, skip by something if no match
-					currCol += matchHat(Crowd, ind, &HatLoc, &ShirtLoc) - 1;
+					// to optimize, skip entire face (some value...) if no match
+					matchHat(Crowd, ind, &HatLoc, &ShirtLoc);
+					// currCol +=
 					break;
 				default:
 					// non-george face pixels or bg pixels
+					// to optimize, full skip nonmatching face pixels
 					break;
 		   }
 	   }
@@ -88,20 +90,30 @@ int main(int argc, char *argv[]) {
    exit(0);
 }
 
-int matchHat(char *Crowd, int ind, int * hat, int * shirt) {
+void matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 
 	unsigned int pixelsChunk = 0;
 	unsigned int extraPixels = 0;
 	void				horizontalMatch(char *, int, int *, int *);
 	void 				verticalMatch(char *, int, int *, int *);
-	int scanAhead;
-	for (scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
+	for (int i = 0; i < 7; i++) {
+		// backtracking, but what if there are two faces with side by side pixels?
+		if (Crowd[ind] > 0x8) {
+			ind++;
+			break;
+		}
+		ind--;
+	}
+	
+
+
+	for (int scanAhead = 0; scanAhead < 12; scanAhead++) { // max length of face pixels
 		if (((ind + scanAhead) % 64) >= 64){
 			break; // stay on the same row
 		}
 		
 		int pixel = Crowd[ind + scanAhead]; // be careful not to modify original arr
-		if (pixel == 0x9 || pixel == 0xa || pixel == 0xb) {
+		if (pixel > 0x8) {
 			pixel = 0xF;
 		}
 			
@@ -125,9 +137,9 @@ int matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 	// int pixelsChunk = Crowd[ind] | (Crowd[ind + 1] << 4) | (Crowd[ind + 2] << 8) | (Crowd[ind + 3] << 12);
 	
 	if (DEBUG) {
-		//printf("Face at %d. Current chunk is 0x%08x. ", ind / 64, pixelsChunk);
+		printf("Face at %d, row %d. Current chunk is 0x%08x. \n", ind, ind / 64, pixelsChunk);
 		if (extraPixels != 0) {
-			//printf("Wowza some extra pixels 0x%08x", extraPixels);
+			printf("--> Wowza some extra pixels 0x%08x\n", extraPixels);
 		}
 	}
 
@@ -142,8 +154,6 @@ int matchHat(char *Crowd, int ind, int * hat, int * shirt) {
 		// shirt
 		verticalMatch(Crowd, ind + 2, hat, shirt);
 	}
-	
-	return scanAhead;
 }
 
 void verticalMatch(char *Crowd, int ind, int * hat, int * shirt) {

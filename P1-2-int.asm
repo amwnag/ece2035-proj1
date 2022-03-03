@@ -8,8 +8,8 @@
 #     F i n d  T u m b l i n g G e o r g e  i n  a  C r o w d
 #
 # P1-2
-# Student Name:
-# Date:
+# Student Name: Amanda Wang
+# Date: 3/3/2022
 #
 # This routine finds an exact match of George's face which may be
 # rotated in a crowd of tumbling (rotated) faces.
@@ -33,21 +33,25 @@ FindGeorge:	addi	$1, $0, Array		# point to array base
 # ***************************************************************************
 	# SWI 552 is useful for debugging. Remove calls to it in
 	# final program submission.
-	# TEMP: remove the lines between **********
-                addi    $2, $0, 160             # TEMP: mark the 160th pixel
-		swi	552			# TEMP: with this swi
-                addi    $2, $0, 161             # TEMP: mark the 161th pixel
-		swi	552			# TEMP: with this swi
-# ***************************************************************************
-	
-	# your code goes here
-	# pack hat/shirt locations into $2 and report your answer
-# ***************************************************************************
-	# TEMP: replace these lines to pack locations properly and report answer
+    #	addi    $2, $0, 160             # Example: mark the 160th pixel
+	#	swi	552			
 
-		lui     $2, 300                 # TEMP: guess the 300th and
-	        ori     $2, $2, 1004            # TEMP: and 1004th pixels
 # ***************************************************************************
+			addi $3, $0, 0		# set up counter for outer loop iterating through rows
+OuterLoop: 	addi $4, $0, 0		# set up counter for inner loop iterating through columns
+InnerLoop:	add  $2, $3, $4		# calculate effective address of pixel, $2 + $3
+			swi 552
+			addi $4, $4, 1		# update inner loop counter
+			slti $5, $4, 64		# check inner loop exit
+			bne  $5, $0, InnerLoop 
+			addi $3, $3, 64		# update statement for outer loop, row is 64 pixels
+			slti $5, $3, 4096		# check outer loop exit condition, total 64 rows, i < 64
+			bne  $5, $0, OuterLoop 
+		
+
+
+		lui     $2, 300             # TEMP: guess the 300th pixel for hat
+	    ori     $2, $2, 1004        # TEMP: and 1004th pixel for shirt
 	
 		swi	571			# submit answer and check
 		# oracle returns correct answer in $3
