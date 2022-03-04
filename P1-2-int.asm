@@ -44,6 +44,7 @@ FindGeorge:	addi	$1, $0, Array		# point to array base
 	#	swi	552			
 
 # ***************************************************************************
+			addi $2, $0, 0 		# initialize $2 to 0, indicating george not found
 			addi $3, $0, 0		# set up counter for outer loop iterating through rows
 OuterLoop: 	addi $4, $0, 0		# set up counter for inner loop iterating through columns
 InnerLoop:	add  $6, $3, $4		# calculate effective address of pixel, $3 + $4
@@ -59,6 +60,7 @@ InnerLoop:	add  $6, $3, $4		# calculate effective address of pixel, $3 + $4
 			lw $3, 4($29)
 			lw $4, 0($29)
 			addi $29, $29, 12	# adjust SP up
+			bne $2, $0, ReportLoc # if $2 is non-zero
 NoMatch: 	addi $4, $4, 9		# update inner loop counter (incrementing by 9)
 			slti $5, $4, 64		# check inner loop exit
 			bne  $5, $0, InnerLoop 
@@ -66,11 +68,8 @@ NoMatch: 	addi $4, $4, 9		# update inner loop counter (incrementing by 9)
 			slti $5, $3, 4096		# check outer loop exit condition, total 64 rows, i less than 64
 			bne  $5, $0, OuterLoop 
 			
-ReportLoc: 	lui     $2, 300             # TEMP: guess the 300th pixel for hat
-			ori     $2, $2, 1004        # TEMP: and 1004th pixel for shirt
-			swi	571			# submit answer and check
+ReportLoc: 	swi	571			# submit answer and check
 			# oracle returns correct answer in $3
-
 			jr	$31			# return to caller
 
 MatchRow: 	addi $6, $6, -1 # use effective address and decrement until bg pixel
@@ -92,25 +91,41 @@ ScanFirst: 	lbu $7, Array($6) 		# get pixel at the current ind, may be redundant
 			beq  $5, $0, MatchRowEnd 
 			sllv $7, $7, $3 		# shift pixel based on iteration
 			or $8, $8, $7 	# use $8 for running word representing first 8 pixels
+			addi $6, $6, 1 		# increment the addr
 			addi $3, $3, 4 		# update, scaled for shifting
 			slti $5, $3, 32 		# exit condition, 4*8
 			bne $5, $0, ScanFirst 	# loop back
 			addi $3, $0, 0 			# reset loop counter
 ScanSecond: lbu $7, Array($6) 		# get pixel at the current ind
+			slti $5, $7, 9 			# exit loop if pixel is bg
+			beq  $5, $0, Comparison # note: if no extra pixels, exit function
 			sllv $7, $7, $3
 			or $9, $9, $7 			# remaining pixels
+			addi $6, $6, 1
 			addi $3, $3, 4 # update, scaled for shifting
 			slti $5, $3, 48 # exit condition, 4*12
 			bne $5, $0, ScanSecond # loop back
-			
-			# if there are no extra pixels, exit function
+Comparison: lw $3, RowHat1($0)		# match with 3 possible sequences
+			bne $8, $3, Compare2
+			lw $4, RowHat2($0)
+			bne $9, $4, MatchRowEnd
+			j MatchMid 		# compare hat funct
+Compare2:	lw $3, RowShirt1($0)
+			bne $8, $3, Compare3
+			lw $4, RowShirt2($0)
+			bne $9, $4, MatchRowEnd
+			j MatchMid 		# compare shirt funct
+Compare3:	lw $3, RowEyes1($0)
+			bne $8, $3, MatchRowEnd
+			lw $4, RowEyes2($0)
+			beq $9, $4, MatchEyes # compare eyes funct	
 MatchRowEnd: jr $31
-			# match with 3 possible sequences
-			# call next functions to do thorough matching
 			
-# MatchEyes:	
+			
+MatchEyes:	addi $6, $6, 4 		# traverse to middle of array
+			addi $3, $0, 0		# init loop counter
+			j MatchRowEnd
 
-
-
-
-# MatchMid:
+MatchMid:	addi $3, $0, 0		# init loop counter
+			
+			j MatchRowEnd
