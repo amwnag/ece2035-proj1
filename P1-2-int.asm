@@ -78,18 +78,20 @@ MatchRow: 	addi $6, $6, -1 # use effective address and decrement until bg pixel
 			beq $5, $0, CheckFirst
 			j MatchRow
 CheckFirst:	addi $6, $6, 1 # increment by 1, checking the first pixel
-			add $2, $0, $6
-			swi	552	# SWI to debug, should see it beginning of face
 			lbu $7, Array($6) 
+			
 			slti $5, $7, 6 # if greater than 5, return
 			beq $5, $0, MatchRowEnd
+			addi $10, $6, 0 		# save copy of $6
+			
 			addi $3, $0, 0	# initialize loop for scanning pixels
 			addi $8, $0, 0	# initialize first part of seq
 			addi $9, $0, 0	# initialize second part of seq
 ScanFirst: 	lbu $7, Array($6) 		# get pixel at the current ind, may be redundant for 1st iteration
+
 			slti $5, $7, 9 			# return if pixel is bg
 			beq  $5, $0, MatchRowEnd 
-			sllv $7, $7, $3 		# shift pixel based on iteration
+			sll $8, $8, 4 		# shift pixel based on iteration
 			or $8, $8, $7 	# use $8 for running word representing first 8 pixels
 			addi $6, $6, 1 		# increment the addr
 			addi $3, $3, 4 		# update, scaled for shifting
@@ -99,13 +101,13 @@ ScanFirst: 	lbu $7, Array($6) 		# get pixel at the current ind, may be redundant
 ScanSecond: lbu $7, Array($6) 		# get pixel at the current ind
 			slti $5, $7, 9 			# exit loop if pixel is bg
 			beq  $5, $0, Comparison # note: if no extra pixels, exit function
-			sllv $7, $7, $3
+			sll	 $9, $9, 4
 			or $9, $9, $7 			# remaining pixels
 			addi $6, $6, 1
 			addi $3, $3, 4 # update, scaled for shifting
-			slti $5, $3, 48 # exit condition, 4*12
+			slti $5, $3, 16 # exit condition, 4*4
 			bne $5, $0, ScanSecond # loop back
-Comparison: lw $3, RowHat1($0)		# match with 3 possible sequences
+Comparison:	lw $3, RowHat1($0)		# match with 3 possible sequences
 			bne $8, $3, Compare2
 			lw $4, RowHat2($0)
 			bne $9, $4, MatchRowEnd
@@ -119,13 +121,19 @@ Compare3:	lw $3, RowEyes1($0)
 			bne $8, $3, MatchRowEnd
 			lw $4, RowEyes2($0)
 			beq $9, $4, MatchEyes # compare eyes funct	
-MatchRowEnd: jr $31
+MatchRowEnd: 	jr $31
 			
 			
-MatchEyes:	addi $6, $6, 4 		# traverse to middle of array
+MatchEyes:	addi $6, $10, 4 		# traverse to middle of array
 			addi $3, $0, 0		# init loop counter
+			add $2, $0, $6
+			swi	552	# SWI to debug
+			addi $2, $0, 0
 			j MatchRowEnd
 
-MatchMid:	addi $3, $0, 0		# init loop counter
-			
+MatchMid:	addi $6, $10, 0		# restore starting ind
+			addi $3, $0, 0		# init loop counter
+			add $2, $0, $6
+			swi	552	# SWI to debug
+			addi $2, $0, 0
 			j MatchRowEnd
