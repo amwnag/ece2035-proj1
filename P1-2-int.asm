@@ -24,6 +24,13 @@
 
 .data
 Array:  .alloc	1024
+RowHat1: .word 0x12125558
+RowHat2: .word 0x8553
+RowShirt1: .word 0x35588555
+RowShirt2: .word 0x2121 # also use in EyesMatch for Seq1
+RowEyes1: .word 0x55755575 # can use within MidMatch after shifting right by 12
+RowEyes2: .word 0x5
+Seq2: .word 0x5588553
 
 .text
 
@@ -39,17 +46,24 @@ FindGeorge:	addi	$1, $0, Array		# point to array base
 # ***************************************************************************
 			addi $3, $0, 0		# set up counter for outer loop iterating through rows
 OuterLoop: 	addi $4, $0, 0		# set up counter for inner loop iterating through columns
-InnerLoop:	add  $2, $3, $4		# calculate effective address of pixel, $3 + $4
-			# access the color in the array
-			# if the color value is either 1, 2, 3, 5, call function to match
-			# look into using jal
-			# look into using stack for function calls teehee (JK DON'T)
-			
-			addi $4, $4, 9		# update inner loop counter (incrementing by 9)
+InnerLoop:	add  $6, $3, $4		# calculate effective address of pixel, $3 + $4
+			lbu	 $7, Array($6)	# access the color in the array
+			slti $5, $7, 9 		# color value is face, call match function
+			beq  $5, $0, NoMatch
+			addi $29, $29, -12 	# store inner and outer loop values in stack
+			sw $31, 8($29)		# preserve return addr
+			sw $3, 4($29)		# push outer loop counter
+			sw $4, 0($29)		# push inner loop counter
+			jal MatchRow		# recall jal stores return addr in $31
+			lw $31, 8($29)
+			lw $3, 4($29)
+			lw $4, 0($29)
+			addi $29, $29, 12	# adjust SP up
+NoMatch: 	addi $4, $4, 9		# update inner loop counter (incrementing by 9)
 			slti $5, $4, 64		# check inner loop exit
 			bne  $5, $0, InnerLoop 
 			addi $3, $3, 64		# update statement for outer loop, row is 64 pixels
-			slti $5, $3, 4096		# check outer loop exit condition, total 64 rows, i < 64
+			slti $5, $3, 4096		# check outer loop exit condition, total 64 rows, i less than 64
 			bne  $5, $0, OuterLoop 
 			
 ReportLoc: 	lui     $2, 300             # TEMP: guess the 300th pixel for hat
@@ -59,4 +73,44 @@ ReportLoc: 	lui     $2, 300             # TEMP: guess the 300th pixel for hat
 
 			jr	$31			# return to caller
 
-MatchRow: 	
+MatchRow: 	addi $6, $6, -1 # use effective address and decrement until bg pixel
+			lbu	 $7, Array($6)	# access the color in the array
+			slti $5, $7, 9	# if it is 9, 10, 11 --> stop decrementing, branch
+			beq $5, $0, CheckFirst
+			j MatchRow
+CheckFirst:	addi $6, $6, 1 # increment by 1, checking the first pixel
+			add $2, $0, $6
+			swi	552	# SWI to debug, should see it beginning of face
+			lbu $7, Array($6) 
+			slti $5, $7, 6 # if greater than 5, return
+			beq $5, $0, MatchRowEnd
+			addi $3, $0, 0	# initialize loop for scanning pixels
+			addi $8, $0, 0	# initialize first part of seq
+			addi $9, $0, 0	# initialize second part of seq
+ScanFirst: 	lbu $7, Array($6) 		# get pixel at the current ind, may be redundant for 1st iteration
+			slti $5, $7, 9 			# return if pixel is bg
+			beq  $5, $0, MatchRowEnd 
+			sllv $7, $7, $3 		# shift pixel based on iteration
+			or $8, $8, $7 	# use $8 for running word representing first 8 pixels
+			addi $3, $3, 4 		# update, scaled for shifting
+			slti $5, $3, 32 		# exit condition, 4*8
+			bne $5, $0, ScanFirst 	# loop back
+			addi $3, $0, 0 			# reset loop counter
+ScanSecond: lbu $7, Array($6) 		# get pixel at the current ind
+			sllv $7, $7, $3
+			or $9, $9, $7 			# remaining pixels
+			addi $3, $3, 4 # update, scaled for shifting
+			slti $5, $3, 48 # exit condition, 4*12
+			bne $5, $0, ScanSecond # loop back
+			
+			# if there are no extra pixels, exit function
+MatchRowEnd: jr $31
+			# match with 3 possible sequences
+			# call next functions to do thorough matching
+			
+# MatchEyes:	
+
+
+
+
+# MatchMid:
