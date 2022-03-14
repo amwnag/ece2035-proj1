@@ -211,8 +211,8 @@ void horizontalMatch(char *Crowd, int ind, int * hat, int * shirt) {
 		printf("Entered horizontal match for face at %d\n", ind / 64);
 	}
 	// process columns where eyes would be
-	int colAddr1 = ind + 4 - (4 * 64);
-	int colAddr2 = ind + 7 - (4 * 64);
+	int colAddr1 = ind + 4 - (4 * 64); // -252
+	int colAddr2 = ind + 7 - (4 * 64); // -249
 	int col1 = 0;
 	int col2 = 0;
 	for (int i = 0; i < 5; i++) { // only need to scan half of face
