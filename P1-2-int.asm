@@ -18,19 +18,16 @@
 # CHANGE LOG: brief description of changes made from P1-2-shell.asm
 # to this version of code.
 # Date  Modification
-# 02/12 Looping through pixels to find one w/ color $4              (example)
-# 02/15 Reduced avg DI by only looking at pixels starting at row 10 (example)
+# 03/04 Can detect George if he is upright
+# 03/07 Can detect George for all orientations, however DI is not good
+# 03/17 Replaced the matching function (immediately break after no match)
+# 03/18 Can once again detect George in all orientations
+# 03/19 Optimized and reduced memory read errors by looping through cols 1-55
+
 #===========================================================================
 
 .data
 Array:  .alloc	1024
-RowHat1: .word 0x12125558
-RowHat2: .word 0x8553
-RowShirt1: .word 0x35588555
-RowShirt2: .word 0x2121 # also use in EyesMatch for Seq1
-RowEyes1: .word 0x55755575 # can use within MidMatch after shifting right by 12
-RowEyes2: .word 0x5
-Seq2: .word 0x5588553
 
 .text
 
@@ -53,16 +50,12 @@ InnerLoop:	add  $7, $4, $5		# calculate effective address of pixel, $4 + $5
 			beq  $6, $0, NoMatch
 			addi $29, $29, -12 	# store inner and outer loop values in stack
 			sw $31, 8($29)		# preserve return addr
-			sw $4, 4($29)		# push outer loop counter
-			sw $5, 0($29)		# push inner loop counter
 			jal MatchRow		# recall jal stores return addr in $31
 			lw $31, 8($29)
-			lw $4, 4($29)
-			lw $5, 0($29)
 			addi $29, $29, 12	# adjust SP up
 			bne $2, $0, ReportLoc # if $2 is non-zero
 NoMatch: 	addi $5, $5, 9		# update inner loop counter (incrementing by 9)
-			slti $6, $5, 64		# check inner loop exit
+			slti $6, $5, 55		# check inner loop exit, indicies 55 and after cannot match
 			bne  $6, $0, InnerLoop 
 			addi $4, $4, 64		# update statement for outer loop, row is 64 pixels
 			slti $6, $4, 4096		# check outer loop exit condition, total 64 rows, i less than 64
@@ -72,125 +65,162 @@ ReportLoc: 	swi	571			# submit answer and check
 			# oracle returns correct answer in $3
 			jr	$31			# return to caller
 
+########
 MatchRow: 	addi $7, $7, -1 # use effective address and decrement until bg pixel
 			lbu	 $8, Array($7)	# access the color in the array
 			slti $6, $8, 9	# if it is 9, 10, 11 --> stop decrementing, branch
 			beq $6, $0, CheckFirst
-			j MatchRow
+			j MatchRow		# loop back to decrement more
+			
 CheckFirst:	addi $7, $7, 1 # increment by 1, checking the first pixel
 			lbu $8, Array($7) 
 			
 			slti $6, $8, 6 # if greater than 5, return
 			beq $6, $0, MatchRowEnd
-			addi $11, $7, 0 		# save copy of $7
 			
-			addi $4, $0, 0	# initialize loop for scanning pixels
-			addi $9, $0, 0	# initialize first part of seq
-			addi $10, $0, 0	# initialize second part of seq
-ScanFirst: 	lbu $8, Array($7) 		# get pixel at the current ind, may be redundant for 1st iteration
-
-			slti $6, $8, 9 			# return if pixel is bg
-			beq  $6, $0, MatchRowEnd 
-			sll $9, $9, 4 		# shift 
-			or $9, $9, $8 	# use $9 for running word representing first 8 pixels
-			addi $7, $7, 1 		# increment the addr
-			addi $4, $4, 4 		# update, scaled for shifting
-			slti $6, $4, 32 		# exit condition, 4*8
-			bne $6, $0, ScanFirst 	# loop back
-			addi $4, $0, 0 			# reset loop counter
-ScanSecond: lbu $8, Array($7) 		# get pixel at the current ind
-			slti $6, $8, 9 			# exit loop if pixel is bg
-			beq  $6, $0, Comparison # note: if no extra pixels, exit function
-			sll	 $10, $10, 4
-			or $10, $10, $8 			# remaining pixels
-			addi $7, $7, 1
-			addi $4, $4, 4 # update, scaled for shifting
-			slti $6, $4, 16 # exit condition, 4*4
-			bne $6, $0, ScanSecond # loop back
-Comparison:	lw $4, RowHat1($0)		# match with 3 possible sequences
-			bne $9, $4, Compare2
-			lw $5, RowHat2($0)
-			bne $10, $5, MatchRowEnd
-			j MatchMid 		# compare hat funct
-Compare2:	lw $4, RowShirt1($0)
-			bne $9, $4, Compare3
-			lw $5, RowShirt2($0)
-			bne $10, $5, MatchRowEnd
-			j MatchMid 		# compare shirt funct
-Compare3:	lw $4, RowEyes1($0)
-			bne $9, $4, MatchRowEnd
-			lw $5, RowEyes2($0)
-			beq $10, $5, MatchEyes # compare eyes funct
-MatchRowEnd: 	jr $31
+			addi $6, $0, 0x5 # yellow
+			beq $8, $6, MatchY # if match yellow, jump to yellow matching
+			addi $6, $0, 0x3 # blue
+			beq $8, $6, MatchB
+			addi $6, $0, 0x1 # white
+			beq $8, $6, MatchW
+			j MatchRowEnd	# no match
 			
-
-			
-MatchEyes:	addi $4, $0, 64		# init values used in matching, counter
-			addi $9, $0, 0		# colUp
-			addi $10, $0, 0		# colDown
-			addi $7, $11, 4 		# traverse to middle of row
-ColScan1:	sll	$9, $9, 4
-			sll $10, $10, 4
-			sub $6, $7, $4			# traverse up arr
-			lbu $8, Array($6) 		# get pixel at the current ind 
-			# check if out of bounds
-			or $9, $9, $8 	
-			add $6, $7, $4			# traverse down arr
+MatchY:		addi $6, $7, 2 # eye, using $6 for temp value
 			lbu $8, Array($6)
-			or $10, $10, $8
-			addi $4, $4, 64		# update
-			slti $6, $4, 512		# exit, 8 * 64
-			bne $6, $0, ColScan1
-			lw $4, RowShirt2($0) # now compare, 0x2121
-			lw $5, Seq2($0)
-			
-			bne $10, $5, UpsideDown
-			srl $9, $9, 12
-			bne $9, $4, MatchRowEnd
-			addi $2, $7, -256
-			sll $2, $2, 16
-			addi $6, $7, 448
-			or $2, $2, $6
-
-UpsideDown: bne $9, $5, MatchRowEnd
-			srl $10, $10, 12
-			bne $10, $4, MatchRowEnd
-			addi $2, $7, 256
-			sll $2, $2, 16
-			addi $6, $7, -448
-			or $2, $2, $6
-			
-			j MatchRowEnd
-			
-
-MatchMid:	addi $4, $0, 0		# init values used in matching
-			addi $9, $0, 0
-			addi $10, $0, 0
-			addi $7, $11, -252		# set starting addr
-ColScan2:	sll	$9, $9, 4
-			sll $10, $10, 4
-			add $6, $7, $4			# traverse down col
-			lbu $8, Array($6) 		# get pixel at the current ind
-			or $9, $9, $8 	
-			addi $6, $6, 3
+			addi $6, $0, 0x7 # store desired value in $6
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 3 # check not shades
 			lbu $8, Array($6)
-			or $10, $10, $8
-			addi $4, $4, 64		# update
-			slti $6, $4, 320		# exit, 5 * 64
-			bne $6, $0, ColScan2
-			lw $6, RowEyes1($0)
-			srl $6, $6, 12
-			beq $6, $9, Good1	# eyes located at left ind
-			beq $6, $10, Good2 		# eyes located right
-			j MatchRowEnd
+			addi $6, $0, 0x5 # store desired value in $6
+			bne $8, $6, MatchRowEnd
+			j MatchEyes
 			
-Good1:		addi $2, $11, 0
+MatchB:		addi $6, $7, 3 		# smile
+			lbu $8, Array($6)
+			addi $6, $0, 0x8 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 4 		# smile2
+			lbu $8, Array($6)
+			addi $6, $0, 0x8 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 7  # face, maybe can implement in a loop somehow 
+			lbu $8, Array($6)
+			addi $6, $0, 0x5 # desired value
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 10 		# hat
+			lbu $8, Array($6)
+			addi $6, $0, 0x2 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 11 		# hat2
+			lbu $8, Array($6)
+			addi $6, $0, 0x1 
+			bne $8, $6, MatchRowEnd
+			j MatchShirt
+			
+MatchW:		addi $6, $7, 1 		# hat color
+			lbu $8, Array($6)
+			addi $6, $0, 0x2 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 4 		# face
+			lbu $8, Array($6)
+			addi $6, $0, 0x5 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 7 		# smile 1
+			lbu $8, Array($6)
+			addi $6, $0, 0x8 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 8 		# smile 2
+			lbu $8, Array($6)
+			addi $6, $0, 0x8 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 11 		# shirt
+			lbu $8, Array($6)
+			addi $6, $0, 0x3 
+			bne $8, $6, MatchRowEnd
+			j MatchHat
+
+MatchRowEnd: jr $31
+			
+########
+			
+MatchEyes:	addi $7, $7, 4		# move to ind of center
+			addi $6, $7, -64 	# calculate addr of pixel above
+
+			lbu $8, Array($6)
+			addi $6, $0, 0x2
+			bne $8, $6, UpsideDown # see if it's red or not
+			
+			addi $7, $7, -256	# start at top of head
+
+			lbu $8, Array($7)
+			addi $6, $0, 0x1 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 64 		# 1 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x2
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 448 		# 7 * 64
+
+			lbu $8, Array($6)
+			addi $6, $0, 0x8
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 512 		# 8 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x8
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 704 		# 11 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x3
+			bne $8, $6, MatchRowEnd
+			add $2, $0, $7 	# match, top of head
 			sll $2, $2, 16
-			addi $6, $11, 11
+			addi $6, $7, 704 # shirt ind
 			or $2, $2, $6
 			j MatchRowEnd
-Good2:		addi $6, $11, 11
-			addi $2, $6, 0
+			
+UpsideDown:	addi $7, $7, -448	# at shirt
+			lbu $8, Array($7)
+			addi $6, $0, 0x3 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 192 		# 3 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x8
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 256 		# 4 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x8 
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 640 		# 10 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x2
+			bne $8, $6, MatchRowEnd
+			addi $6, $7, 704 		# 11 * 64
+			lbu $8, Array($6)
+			addi $6, $0, 0x1
+			bne $8, $6, MatchRowEnd
+			addi $2, $7, 704 	# hat ind into register 2
 			sll $2, $2, 16
-			or $2, $2, $11
+			or $2, $2, $7
+			j MatchRowEnd
+
+########
+MatchHat: 	addi $6, $7, 132 		# 4 + 64 * 2  
+			lbu $8, Array($6)
+			addi $6, $0, 0x7
+			bne $8, $6, MatchRowEnd
+			add $2, $0, $7 	# match!
+			sll $2, $2, 16
+			addi $6, $7, 11 # shirt ind
+			or $2, $2, $6
+			j MatchRowEnd
+########
+
+MatchShirt: addi $6, $7, 135 		# 7 + 64 * 2
+			lbu $8, Array($6)
+			addi $6, $0, 0x7
+			bne $8, $6, MatchRowEnd
+			addi $2, $7, 11 # hat ind into register 2
+			sll $2, $2, 16
+			or $2, $2, $7
 			j MatchRowEnd
