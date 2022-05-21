@@ -171,9 +171,6 @@ void eyesMatch(char *Crowd, int ind, int * hat, int * shirt) {
 		if (Crowd[ind] != 0x1 || Crowd[ind + 1*64] != 0x2) {
 			return;
 		}
-		if (Crowd[ind + 4*64] != 0x5) {
-			return;
-		}
 		if (Crowd[ind + 7*64] != 0x8 || Crowd[ind + 8*64] != 0x8) {
 			return;
 		}
@@ -185,7 +182,7 @@ void eyesMatch(char *Crowd, int ind, int * hat, int * shirt) {
 	} else {
 		// upside down
 		ind -= 7*64;
-		if (Crowd[ind + 7*64] != 0x5) {
+		if (Crowd[ind] != 0x3) {
 			return;
 		}
 		if (Crowd[ind + 3*64] != 0x8 || Crowd[ind + 4*64] != 0x8) {
